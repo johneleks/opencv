@@ -122,6 +122,11 @@ CVAPI(int) cvGrabFrame( CvCapture* capture );
   !!!DO NOT RELEASE or MODIFY the retrieved frame!!! */
 CVAPI(IplImage*) cvRetrieveFrame( CvCapture* capture, int streamIdx CV_DEFAULT(0) );
 
+/* go to frame specified by zero-based index, return 1 on success, 0 on fail 
+  (causes for failure: index out of range, or direct navigation not supported).
+  this function is thought to be fast               */
+CVAPI(int) cvGoToFrame( CvCapture* capture, int index );
+
 /* Just a combination of cvGrabFrame and cvRetrieveFrame
    !!!DO NOT RELEASE or MODIFY the retrieved frame!!!      */
 CVAPI(IplImage*) cvQueryFrame( CvCapture* capture );

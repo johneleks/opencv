@@ -358,6 +358,10 @@ public:
     CV_WRAP virtual bool isOpened() const;
     CV_WRAP virtual void release();
 
+    CV_WRAP virtual bool goToFrame(int index);
+    CV_WRAP virtual int getFrameCount();
+    CV_WRAP virtual int getCurrentFrameIndex();
+
     CV_WRAP virtual bool grab();
     CV_WRAP virtual bool retrieve(OutputArray image, int flag = 0);
     virtual VideoCapture& operator >> (CV_OUT Mat& image);
@@ -372,6 +376,7 @@ protected:
     Ptr<IVideoCapture> icap;
 private:
     static Ptr<IVideoCapture> createCameraCapture(int index);
+    static Ptr<IVideoCapture> createFileCapture(const String& filename);
 };
 
 class CV_EXPORTS_W VideoWriter

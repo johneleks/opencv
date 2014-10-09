@@ -1749,6 +1749,48 @@ int cvGrabFrame_FFMPEG(CvCapture_FFMPEG* capture)
     return capture->grabFrame();
 }
 
+int cvGoToFrame_FFMPEG(CvCapture_FFMPEG* capture, int index)
+{
+    // Ensure all data structures are initialized
+    if (cvGetCurrentFrameIndex_FFMPEG(capture) == -1)
+        return 0;
+
+    int64_t first_frame_number = capture->first_frame_number;
+    int64_t new_frame_index = first_frame_number + index;
+
+    if ( new_frame_index >= first_frame_number && new_frame_index < first_frame_number + capture->get_total_frames() ) {
+        capture->seek(new_frame_index);
+        return 1;
+    } else {
+        return 0;
+    }
+}
+
+int cvGetFrameCount_FFMPEG(CvCapture_FFMPEG* capture)
+{
+    // Ensure all data structures are initialized
+    if (cvGetCurrentFrameIndex_FFMPEG(capture) == -1)
+        return 0;
+
+    return capture->get_total_frames() - capture->first_frame_number;
+}
+
+int cvGetCurrentFrameIndex_FFMPEG(CvCapture_FFMPEG* capture)
+{
+    int64_t first_frame_number = capture->first_frame_number;
+    
+    if ( first_frame_number < 0 && capture->get_total_frames() > 0 && capture->frame_number == 0 ) {
+        capture->grabFrame();
+        first_frame_number = capture->first_frame_number;
+        capture->frame_number = first_frame_number;
+    }
+
+    if ( first_frame_number < 0 )
+        return -1;
+
+    return capture->frame_number - first_frame_number;
+}
+
 int cvRetrieveFrame_FFMPEG(CvCapture_FFMPEG* capture, unsigned char** data, int* step, int* width, int* height, int* cn)
 {
     return capture->retrieveFrame(0, data, step, width, height, cn);

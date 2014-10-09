@@ -42,6 +42,8 @@
 #include "precomp.hpp"
 #include "cap_intelperc.hpp"
 #include "cap_dshow.hpp"
+#include "cap_ffmpeg.hpp"
+#include "cap_vfw.hpp"
 
 #if defined _M_X64 && defined _MSC_VER && !defined CV_ICC
 #pragma optimize("",off)
@@ -79,6 +81,20 @@ CV_IMPL IplImage* cvQueryFrame( CvCapture* capture )
     return capture->retrieveFrame(0);
 }
 
+CV_IMPL int cvGoToFrame( CvCapture* capture, int index )
+{
+    return capture ? capture->goToFrame(index) : 0;
+}
+
+CV_IMPL int cvGetFrameCount( CvCapture* capture )
+{
+    return capture ? capture->getFrameCount() : -1;
+}
+
+CV_IMPL int cvGetCurrentFrameIndex( CvCapture* capture )
+{
+    return capture ? capture->getCurrentFrameIndex() : -1;
+}
 
 CV_IMPL int cvGrabFrame( CvCapture* capture )
 {
@@ -366,11 +382,6 @@ CV_IMPL CvCapture * cvCreateFileCapture (const char * filename)
     if (! result)
         result = cvCreateFileCapture_FFMPEG_proxy (filename);
 
-#ifdef HAVE_VFW
-    if (! result)
-        result = cvCreateFileCapture_VFW (filename);
-#endif
-
 #ifdef HAVE_MSMF
     if (! result)
         result = cvCreateFileCapture_MSMF (filename);
@@ -499,6 +510,9 @@ VideoCapture::~VideoCapture()
 bool VideoCapture::open(const String& filename)
 {
     if (isOpened()) release();
+    icap = createFileCapture(filename);
+    if (!icap.empty())
+        return true;
     cap.reset(cvCreateFileCapture(filename.c_str()));
     return isOpened();
 }
@@ -522,6 +536,30 @@ void VideoCapture::release()
 {
     icap.release();
     cap.release();
+}
+
+bool VideoCapture::goToFrame(int index)
+{
+    if (!icap.empty())
+        return icap->goToFrame(index);
+
+    return cvGoToFrame(cap, index) == 1 ? true : false;
+}
+
+int VideoCapture::getFrameCount()
+{
+    if (!icap.empty())
+        return icap->getFrameCount();
+
+    return cvGetFrameCount(cap);
+}
+
+int VideoCapture::getCurrentFrameIndex()
+{
+    if (!icap.empty())
+        return icap->getCurrentFrameIndex();
+
+    return cvGetCurrentFrameIndex(cap);
 }
 
 bool VideoCapture::grab()
@@ -641,8 +679,27 @@ Ptr<IVideoCapture> VideoCapture::createCameraCapture(int index)
     return Ptr<IVideoCapture>();
 }
 
+Ptr<IVideoCapture> VideoCapture::createFileCapture(const String& filename)
+{
+    Ptr<IVideoCapture> capture;
+
+    capture = makePtr<VideoCapture_FFMPEG>(filename);
+    if (capture && capture.dynamicCast<VideoCapture_FFMPEG>()->isOpened())
+        return capture;
+
+#ifdef HAVE_VFW
+    capture = makePtr<CvCaptureAVI_VFW>(filename);
+    if (capture && capture.dynamicCast<CvCaptureAVI_VFW>()->isOpened())
+        return capture;
+#endif
+
+    // failed open a file
+    return Ptr<IVideoCapture>();
+}
+
 VideoWriter::VideoWriter()
-{}
+{
+}
 
 VideoWriter::VideoWriter(const String& filename, int _fourcc, double fps, Size frameSize, bool isColor)
 {

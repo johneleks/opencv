@@ -47,9 +47,14 @@
 #include "cap_ffmpeg_api.hpp"
 #endif
 
+#include "cap_ffmpeg.hpp"
+
 static CvCreateFileCapture_Plugin icvCreateFileCapture_FFMPEG_p = 0;
 static CvReleaseCapture_Plugin icvReleaseCapture_FFMPEG_p = 0;
 static CvGrabFrame_Plugin icvGrabFrame_FFMPEG_p = 0;
+static CvGoToFrame_Plugin icvGoToFrame_FFMPEG_p = 0;
+static CvGetFrameCount_Plugin icvGetFrameCount_FFMPEG_p = 0;
+static CvGetCurrentFrameIndex_Plugin icvGetCurrentFrameIndex_FFMPEG_p = 0;
 static CvRetrieveFrame_Plugin icvRetrieveFrame_FFMPEG_p = 0;
 static CvSetCaptureProperty_Plugin icvSetCaptureProperty_FFMPEG_p = 0;
 static CvGetCaptureProperty_Plugin icvGetCaptureProperty_FFMPEG_p = 0;
@@ -113,6 +118,12 @@ private:
                 (CvReleaseCapture_Plugin)GetProcAddress(icvFFOpenCV, "cvReleaseCapture_FFMPEG");
             icvGrabFrame_FFMPEG_p =
                 (CvGrabFrame_Plugin)GetProcAddress(icvFFOpenCV, "cvGrabFrame_FFMPEG");
+            icvGoToFrame_FFMPEG_p = 
+                (CvGoToFrame_Plugin)GetProcAddress(icvFFOpenCV, "cvGoToFrame_FFMPEG");
+            icvGetFrameCount_FFMPEG_p =
+                (CvGetFrameCount_Plugin)GetProcAddress(icvFFOpenCV, "cvGetFrameCount_FFMPEG");
+            icvGetCurrentFrameIndex_FFMPEG_p =
+                (CvGetCurrentFrameIndex_Plugin)GetProcAddress(icvFFOpenCV, "cvGetCurrentFrameIndex_FFMPEG");
             icvRetrieveFrame_FFMPEG_p =
                 (CvRetrieveFrame_Plugin)GetProcAddress(icvFFOpenCV, "cvRetrieveFrame_FFMPEG");
             icvSetCaptureProperty_FFMPEG_p =
@@ -130,6 +141,9 @@ private:
             if( icvCreateFileCapture_FFMPEG_p != 0 &&
                 icvReleaseCapture_FFMPEG_p != 0 &&
                 icvGrabFrame_FFMPEG_p != 0 &&
+                icvGoToFrame_FFMPEG_p != 0 &&
+		icvGetFrameCount_FFMPEG_p != 0 &&
+	        icvGetCurrentFrameIndex_FFMPEG_p != 0 &&
                 icvRetrieveFrame_FFMPEG_p != 0 &&
                 icvSetCaptureProperty_FFMPEG_p != 0 &&
                 icvGetCaptureProperty_FFMPEG_p != 0 &&
@@ -149,6 +163,9 @@ private:
         icvCreateFileCapture_FFMPEG_p = (CvCreateFileCapture_Plugin)cvCreateFileCapture_FFMPEG;
         icvReleaseCapture_FFMPEG_p = (CvReleaseCapture_Plugin)cvReleaseCapture_FFMPEG;
         icvGrabFrame_FFMPEG_p = (CvGrabFrame_Plugin)cvGrabFrame_FFMPEG;
+        icvGoToFrame_FFMPEG_p = (CvGoToFrame_Plugin)cvGoToFrame_FFMPEG;
+        icvGetFrameCount_FFMPEG_p = (CvGetFrameCount_Plugin)cvGetFrameCount_FFMPEG;
+        icvGetCurrentFrameIndex_FFMPEG_p = (CvGetCurrentFrameIndex_Plugin)cvGetCurrentFrameIndex_FFMPEG;
         icvRetrieveFrame_FFMPEG_p = (CvRetrieveFrame_Plugin)cvRetrieveFrame_FFMPEG;
         icvSetCaptureProperty_FFMPEG_p = (CvSetCaptureProperty_Plugin)cvSetCaptureProperty_FFMPEG;
         icvGetCaptureProperty_FFMPEG_p = (CvGetCaptureProperty_Plugin)cvGetCaptureProperty_FFMPEG;
@@ -191,6 +208,19 @@ public:
         cvSetData(&frame, data, step);
         return &frame;
     }
+    virtual bool goToFrame(int index) 
+    {
+        return ffmpegCapture ? icvGoToFrame_FFMPEG_p(ffmpegCapture, index) !=0 : false;
+    }
+    virtual int getFrameCount()
+    {
+        return ffmpegCapture ? icvGetFrameCount_FFMPEG_p(ffmpegCapture) : -1;
+    }
+    virtual int getCurrentFrameIndex() 
+    { 
+        return ffmpegCapture ? icvGetCurrentFrameIndex_FFMPEG_p(ffmpegCapture) : -1;
+    }
+
     virtual bool open( const char* filename )
     {
         icvInitFFMPEG::Init();
@@ -223,6 +253,83 @@ CvCapture* cvCreateFileCapture_FFMPEG_proxy(const char * filename)
     delete result;
     return 0;
 }
+
+namespace cv
+{
+
+VideoCapture_FFMPEG::VideoCapture_FFMPEG(const String& filename)
+{
+    ffmpegCapture = 0;
+    icvInitFFMPEG::Init();
+
+    if( icvCreateFileCapture_FFMPEG_p )
+        ffmpegCapture = icvCreateFileCapture_FFMPEG_p( filename.c_str() );
+}
+
+VideoCapture_FFMPEG::~VideoCapture_FFMPEG()
+{
+    if( ffmpegCapture && icvReleaseCapture_FFMPEG_p )
+        icvReleaseCapture_FFMPEG_p( &ffmpegCapture );
+    assert( ffmpegCapture == 0 );
+    ffmpegCapture = 0;
+}
+
+double VideoCapture_FFMPEG::getProperty(int propId)
+{
+    return ffmpegCapture ? icvGetCaptureProperty_FFMPEG_p(ffmpegCapture, propId) : 0;
+}
+
+bool VideoCapture_FFMPEG::setProperty(int propId, double value)
+{
+    return ffmpegCapture ? icvSetCaptureProperty_FFMPEG_p(ffmpegCapture, propId, value)!=0 : false;
+}
+
+bool VideoCapture_FFMPEG::goToFrame(int index)
+{
+    return ffmpegCapture ? icvGoToFrame_FFMPEG_p(ffmpegCapture, index) !=0 : false;
+}
+
+int VideoCapture_FFMPEG::getFrameCount()
+{
+    return ffmpegCapture ? icvGetFrameCount_FFMPEG_p(ffmpegCapture) : -1;
+}
+
+int VideoCapture_FFMPEG::getCurrentFrameIndex()                                                                                                    
+{
+    return ffmpegCapture ? icvGetCurrentFrameIndex_FFMPEG_p(ffmpegCapture) : -1;
+}
+
+bool VideoCapture_FFMPEG::grabFrame()
+{
+    return ffmpegCapture ? icvGrabFrame_FFMPEG_p(ffmpegCapture) !=0 : false;
+}
+
+bool VideoCapture_FFMPEG::retrieveFrame(int, OutputArray frame)
+{
+    unsigned char* data = 0;
+    int step=0, width=0, height=0, cn=0;
+
+    if (!ffmpegCapture ||
+       !icvRetrieveFrame_FFMPEG_p(ffmpegCapture, &data, &step, &width, &height, &cn))
+        return false;
+
+    IplImage src;
+    cvInitImageHeader(&src, cvSize(width, height), 8, cn);
+    cvSetData(&src, data, step);
+
+    Mat temp = cvarrToMat(&src);
+    frame.assign(temp);
+
+    return true;
+}
+
+bool VideoCapture_FFMPEG::isOpened() const
+{
+    return ffmpegCapture != 0;
+}
+
+
+} // cv
 
 class CvVideoWriter_FFMPEG_proxy :
     public CvVideoWriter

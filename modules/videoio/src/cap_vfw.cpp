@@ -41,7 +41,7 @@
 
 #include "precomp.hpp"
 
-#include <vfw.h>
+#include "cap_vfw.hpp"
 
 #ifdef __GNUC__
 #define WM_CAP_FIRSTA              (WM_USER)
@@ -69,7 +69,6 @@ static BITMAPINFOHEADER icvBitmapHeader( int width, int height, int bpp, int com
     return bmih;
 }
 
-
 static void icvInitCapture_VFW()
 {
     static int isInitialized = 0;
@@ -80,46 +79,22 @@ static void icvInitCapture_VFW()
     }
 }
 
-
-class CvCaptureAVI_VFW : public CvCapture
+namespace cv
 {
-public:
-    CvCaptureAVI_VFW()
-    {
-      CoInitialize(NULL);
-      init();
-    }
 
-    virtual ~CvCaptureAVI_VFW()
-    {
-        close();
-        CoUninitialize();
-    }
+CvCaptureAVI_VFW::CvCaptureAVI_VFW(const String& filename)
+{
+    this->filename = filename;
+    assert( SUCCEEDED(CoInitialize(NULL)) );
+    init();
+    open();
+}
 
-    virtual bool open( const char* filename );
-    virtual void close();
-
-    virtual double getProperty(int);
-    virtual bool setProperty(int, double);
-    virtual bool grabFrame();
-    virtual IplImage* retrieveFrame(int);
-    virtual int getCaptureDomain() { return CV_CAP_VFW; } // Return the type of the capture object: CV_CAP_VFW, etc...
-
-protected:
-    void init();
-
-    PAVIFILE            avifile;
-    PAVISTREAM          avistream;
-    PGETFRAME           getframe;
-    AVISTREAMINFO       aviinfo;
-    BITMAPINFOHEADER  * bmih;
-    CvSlice             film_range;
-    double              fps;
-    int                 pos;
-    IplImage*           frame;
-    CvSize              size;
-};
-
+CvCaptureAVI_VFW::~CvCaptureAVI_VFW()
+{
+    close();
+    CoUninitialize();
+}
 
 void CvCaptureAVI_VFW::init()
 {
@@ -134,7 +109,6 @@ void CvCaptureAVI_VFW::init()
     frame = 0;
     size = cvSize(0,0);
 }
-
 
 void CvCaptureAVI_VFW::close()
 {
@@ -154,15 +128,12 @@ void CvCaptureAVI_VFW::close()
 }
 
 
-bool CvCaptureAVI_VFW::open( const char* filename )
+void CvCaptureAVI_VFW::open()
 {
     close();
     icvInitCapture_VFW();
 
-    if( !filename )
-        return false;
-
-    HRESULT hr = AVIFileOpen( &avifile, filename, OF_READ, NULL );
+    HRESULT hr = AVIFileOpen( &avifile, filename.c_str(), OF_READ, NULL );
     if( SUCCEEDED(hr))
     {
         hr = AVIFileGetStream( avifile, &avistream, streamtypeVIDEO, 0 );
@@ -181,29 +152,48 @@ bool CvCaptureAVI_VFW::open( const char* filename )
                 pos = film_range.start_index;
                 getframe = AVIStreamGetFrameOpen( avistream, &bmihdr );
                 if( getframe != 0 )
-                    return true;
+                    return;
 
                 // Attempt to open as 8-bit AVI.
                 bmihdr = icvBitmapHeader( size.width, size.height, 8);
                 getframe = AVIStreamGetFrameOpen( avistream, &bmihdr );
                 if( getframe != 0 )
-                    return true;
+                    return;
             }
         }
     }
 
     close();
-    return false;
+}
+
+bool CvCaptureAVI_VFW::isOpened() const
+{
+    return avistream != 0;
+}
+
+bool CvCaptureAVI_VFW::goToFrame(int index)
+{
+    if (!isOpened())
+        return false;
+
+    int newPos = film_range.start_index + index;
+    if (index < 0 || newPos > film_range.end_index)
+        return false;
+
+    pos = film_range.start_index + index;
+    return true;
 }
 
 bool CvCaptureAVI_VFW::grabFrame()
 {
     if( avistream )
+	{
         bmih = (BITMAPINFOHEADER*)AVIStreamGetFrame( getframe, pos++ );
+	}
     return bmih != 0;
 }
 
-IplImage* CvCaptureAVI_VFW::retrieveFrame(int)
+bool CvCaptureAVI_VFW::retrieveFrame(int, OutputArray frame)
 {
     if( avistream && bmih )
     {
@@ -225,17 +215,14 @@ IplImage* CvCaptureAVI_VFW::retrieveFrame(int)
 
         cvSetData( &src, dataPtr, src.widthStep );
 
-        if( !frame || frame->width != src.width || frame->height != src.height )
-        {
-            cvReleaseImage( &frame );
-            frame = cvCreateImage( cvGetSize(&src), 8, nChannels );
-        }
+        Mat temp = cvarrToMat( &src );
 
-        cvFlip( &src, frame, 0 );
-        return frame;
+        flip( temp, frame, 0 );
+
+        return true;
     }
 
-    return 0;
+    return false;
 }
 
 double CvCaptureAVI_VFW::getProperty( int property_id )
@@ -297,15 +284,7 @@ bool CvCaptureAVI_VFW::setProperty( int property_id, double value )
     return true;
 }
 
-CvCapture* cvCreateFileCapture_VFW (const char* filename)
-{
-    CvCaptureAVI_VFW* capture = new CvCaptureAVI_VFW;
-    if( capture->open(filename) )
-        return capture;
-    delete capture;
-    return 0;
-}
-
+} // cv
 
 /********************* Capturing video from camera via VFW *********************/
 
@@ -658,7 +637,6 @@ CvCapture* cvCreateCameraCapture_VFW( int index )
     return 0;
 }
 
-
 /*************************** writing AVIs ******************************/
 
 class CvVideoWriter_VFW : public CvVideoWriter
@@ -795,7 +773,6 @@ bool CvVideoWriter_VFW::createStreams( CvSize frameSize, bool isColor )
     }
     return false;
 }
-
 
 bool CvVideoWriter_VFW::writeFrame( const IplImage* image )
 {
