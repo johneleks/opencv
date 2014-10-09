@@ -25,6 +25,8 @@ ocv_module_include_directories(
     "${PYTHON_INCLUDE_PATH}"
     ${PYTHON_NUMPY_INCLUDE_DIRS}
     "${PYTHON_SOURCE_DIR}/src2"
+
+    "${PYTHON3_INCLUDE_DIR2}"
     )
 
 set(opencv_hdrs "")
